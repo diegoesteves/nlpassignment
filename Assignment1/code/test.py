@@ -6,21 +6,23 @@ from featureextractor import FeatureExtractor
 from transition import Transition
 
 if __name__ == '__main__':
-    model_name = "badfeatures.model"
+    model_name = "danish.model"
+    train = True
     if "english" in model_name:
         data = dataset.get_english_train_corpus().parsed_sents()
     elif "swedish" in model_name:
         data = dataset.get_swedish_train_corpus().parsed_sents()
     else:
-        data = dataset.get_danish_test_corpus().parsed_sents()
+        data = dataset.get_danish_train_corpus().parsed_sents()
 
     random.seed(1234)
     subdata = random.sample(data, 200)
 
     try:
-        #tp = TransitionParser(Transition, FeatureExtractor)
-        #tp.train(subdata)
-        #tp.save(model_name)
+        if train:
+            tp = TransitionParser(Transition, FeatureExtractor)
+            tp.train(subdata)
+            tp.save(model_name)
 
         if "english" in model_name:
             testdata = dataset.get_english_test_corpus().parsed_sents()
