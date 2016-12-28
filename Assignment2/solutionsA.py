@@ -1,6 +1,7 @@
 import math
 import nltk
 import time
+from nltk.tokenize import RegexpTokenizer
 
 # Constants to be used by you when you fill the functions
 START_SYMBOL = '*'
@@ -12,9 +13,42 @@ MINUS_INFINITY_SENTENCE_LOG_PROB = -1000
 # training_corpus: is a list of the sentences. Each sentence is a string with tokens separated by spaces, ending in a newline character.
 # This function outputs three python dictionaries, where the keys are tuples expressing the ngram and the value is the log probability of that ngram
 def calc_probabilities(training_corpus):
-    unigram_p = {}
-    bigram_p = {}
-    trigram_p = {}
+
+    unigrams, bigrams, trigrams = {}, {}, {}
+
+    for s in training_corpus:
+        tokens = s.strip().split() + [STOP_SYMBOL]
+        for w in tokens:
+            if w in unigrams:
+                unigrams[w] += 1
+            else:
+                unigrams[w] = 1
+
+        tokens = [START_SYMBOL] + tokens
+        bigram_tuples = tuple(nltk.bigrams(tokens))
+        for b in bigram_tuples:
+            if b in bigrams:
+                bigrams[b] += 1
+            else:
+                bigrams[b] = 1
+
+        tokens = [START_SYMBOL] + tokens
+        trigram_tuples = tuple(nltk.trigrams(tokens))
+        for t in trigram_tuples:
+            if t in trigrams:
+                trigrams[t] += 1
+            else:
+                trigrams[t] = 1
+
+    wc = sum(unigrams.itervalues())
+    unigram_p = {z: math.log(float(c) / wc, 2) for z, c in unigrams.iteritems()}
+
+    unigrams[START_SYMBOL] = len(training_corpus)
+    bigram_p = {z: math.log(float(c) / unigrams[z[0]], 2) for z, c in bigrams.iteritems()}
+
+    bigrams[(START_SYMBOL, START_SYMBOL)] = len(training_corpus)
+    trigram_p = {z: math.log(float(c) / bigrams[z[:2]], 2) for z, c in trigrams.iteritems()}
+
     return unigram_p, bigram_p, trigram_p
 
 # Prints the output for q1
@@ -49,6 +83,21 @@ def q1_output(unigrams, bigrams, trigrams, filename):
 # This function must return a python list of scores, where the first element is the score of the first sentence, etc. 
 def score(ngram_p, n, corpus):
     scores = []
+
+    for s in corpus:
+        x = 0
+        t = s.strip().split()
+        if n == 1: tks = t + [STOP_SYMBOL]
+        elif n == 2: tks = nltk.bigrams([START_SYMBOL] + t + [STOP_SYMBOL])
+        elif n == 3: tks = nltk.trigrams([START_SYMBOL] + [START_SYMBOL] + t + [STOP_SYMBOL])
+        else: raise ValueError('error %s' % n)
+        for t in tks:
+            try:
+                v = ngram_p[t]
+            except KeyError:
+                v = MINUS_INFINITY_SENTENCE_LOG_PROB
+            x += v
+        scores.append(x)
     return scores
 
 # Outputs a score to a file
@@ -66,6 +115,27 @@ def score_output(scores, filename):
 # Like score(), this function returns a python list of scores
 def linearscore(unigrams, bigrams, trigrams, corpus):
     scores = []
+
+    for s in corpus:
+        interpolated = 0.0
+        tokens = s.strip().split()
+        tokens.insert(0, START_SYMBOL)
+        tokens.insert(0, START_SYMBOL)
+        tokens.append(STOP_SYMBOL)
+        sent_trigrams = tuple(nltk.trigrams(tokens))
+
+        for t in sent_trigrams:
+            u = (t[2],)
+            b = (t[1], t[2],)
+            if t not in trigrams or b not in bigrams or u not in unigrams:
+                interpolated = MINUS_INFINITY_SENTENCE_LOG_PROB
+                break
+                interpolated += math.log(((1 / 3.0) * 2 ** trigrams[t]) +
+                                         ((1 / 3.0) * 2 ** bigrams[b]) +
+                                         ((1 / 3.0) * 2 ** unigrams[u]), 2)
+
+        scores.append(interpolated)
+
     return scores
 
 DATA_PATH = 'data/'
