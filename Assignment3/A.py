@@ -1,8 +1,9 @@
-import nltk
-
 from main import replace_accented
 from sklearn import svm
 from sklearn import neighbors
+import nltk
+import collections
+
 
 # don't change the window size
 window_size = 10
@@ -23,15 +24,20 @@ def build_s(data):
         }
 
     '''
-    s = {}
-    # implement your code here
-    for l in data:
-        c = []
-        for i in data[l]:
-            c += nltk.word_tokenize(i[1])[-window_size:] + nltk.word_tokenize(i[3])[0:window_size]
-        s[l] = list(set(c))
-    return s
+    s = collections.defaultdict(set)
 
+    # implement your code here
+    for lexelt, instances in data.iteritems():
+        for (instance_id, left, head, right, senseid) in instances:
+            left_tokens = nltk.word_tokenize(left)
+            right_tokens = nltk.word_tokenize(right)
+            window = left_tokens[-window_size:] + right_tokens[:window_size]
+            s[lexelt].update(window)
+
+    # create an ordered list instead of a set for each lexelt because ordering is very important further
+    for lexelt in s.keys():
+        s[lexelt] = list(s[lexelt])
+    return s
 
 
 # A.1
@@ -53,14 +59,11 @@ def vectorize(data, s):
     vectors = {}
     labels = {}
 
-    for i in data:
-        wc = []
-        context = nltk.word_tokenize(i[1])[-window_size:] + nltk.word_tokenize(i[3])[0:window_size]
-        for w in s:
-            wc.append(context.count(w))
-        vectors[i[0]] = wc
-        labels[i[0]] = i[4]
-
+    # implement your code here
+    for (instance_id, left_context, head, right_context, sense_id) in data:
+        tokens = nltk.word_tokenize(left_context) + nltk.word_tokenize(right_context)
+        vectors[instance_id] = [tokens.count(w) for w in s]
+        labels[instance_id] = sense_id
     return vectors, labels
 
 
@@ -92,14 +95,18 @@ def classify(X_train, X_test, y_train):
     svm_clf = svm.LinearSVC()
     knn_clf = neighbors.KNeighborsClassifier()
 
-    svm_clf.fit([el for el in X_train.values()], [el for el in y_train.values()])
-    knn_clf.fit([el for el in X_train.values()], [el for el in y_train.values()])
+    # implement your code here
+    x_matrix = []
+    y_vector = []
+    for instance_id, x in X_train.iteritems():
+        x_matrix.append(x)
+        y_vector.append(y_train[instance_id])
 
-    svm_results = [(instance, label) for instance, label in
-                   zip(X_test, svm_clf.predict([el for el in X_test.values()]))]
-    knn_results = [(instance, label) for instance, label in
-                   zip(X_test, knn_clf.predict([el for el in X_test.values()]))]
-
+    svm_clf.fit(x_matrix, y_vector)
+    knn_clf.fit(x_matrix, y_vector)
+    for instance_id, x in X_test.iteritems():
+        svm_results.append((instance_id, svm_clf.predict(x)[0]))
+        knn_results.append((instance_id, knn_clf.predict(x)[0]))
     return svm_results, knn_results
 
 # A.3, A.4 output
@@ -116,15 +123,14 @@ def print_results(results ,output_file):
     # you should sort results on instance_id before printing
     lines = []
     with open(output_file, 'w') as fp:
-        for l, p in results.iteritems():
-            p.sort(key=lambda x: x[0])
-            for i, sense_id in p:
-                lines.append((replace_accented(l), replace_accented(i),
+        for lexelt, predictions in results.iteritems():
+            predictions.sort(key=lambda x: x[0])
+            for instance_id, sense_id in predictions:
+                lines.append((replace_accented(lexelt), replace_accented(instance_id),
                               replace_accented(unicode(sense_id))))
         lines.sort(key=lambda x: x[0])
-        for l in lines:
-            fp.write('{} {} {}\n'.format(*l))
-
+        for line in lines:
+            fp.write('{} {} {}\n'.format(*line))
 
 # run part A
 def run(train, test, language, knn_file, svm_file):
@@ -138,6 +144,5 @@ def run(train, test, language, knn_file, svm_file):
 
     print_results(svm_results, svm_file)
     print_results(knn_results, knn_file)
-
 
 
